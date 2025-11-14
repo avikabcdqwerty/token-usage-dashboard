@@ -1,0 +1,126 @@
+openapi: 3.0.3
+info:
+  title: Token Usage Dashboard API
+  version: "1.0.0"
+  description: |
+    Secure API for token usage analytics. All endpoints require JWT authentication and enforce strict RBAC.
+    All data transmissions must use TLS. Access and data retrieval are logged for audit.
+
+servers:
+  - url: https://api.token-dashboard.local
+
+tags:
+  - name: Token Usage
+    description: Endpoints for retrieving token usage analytics for the authenticated user.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    TokenUsagePeriod:
+      type: object
+      properties:
+        period:
+          type: string
+          format: date
+          description: Aggregated period (YYYY-MM-DD)
+        total_tokens:
+          type: integer
+          description: Total tokens used in this period
+      required: [period, total_tokens]
+    TokenUsageBreakdown:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: integer
+      description: |
+        Mapping of period to activity breakdowns, e.g. { "2024-06-01": {"chat": 100, "api": 50} }
+    TokenUsageResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenUsagePeriod"
+        breakdowns:
+          $ref: "#/components/schemas/TokenUsageBreakdown"
+      required: [data, breakdowns]
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/token-usage:
+    get:
+      tags:
+        - Token Usage
+      summary: Get token usage for the authenticated user
+      description: |
+        Returns token usage data for the authenticated user, aggregated by the selected timeframe.
+        Only the authenticated user's data is returned (RBAC enforced).
+      operationId: getTokenUsage
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD)
+        - name: timeframe
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: daily
+          description: Aggregation period
+      responses:
+        "200":
+          description: Token usage data for the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenUsageResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - BearerAuth: []
